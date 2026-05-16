@@ -82,51 +82,45 @@ stages:
                 $(imageTag)
                 latest
 
-# ── Stage 2: Deploy to Azure Static Web App ──────────────────────────────────
-# Azure Static Web App is the correct host for the CRA static bundle.
-# It is free for students and includes a global CDN automatically.
-  - stage: DeployStaticWebApp
-    displayName: 'Deploy to Azure Static Web App'
+# ── Stage 2: Deploy Frontend Docker Image to App Service ─────────────────────
+# Note: Azure Static Web Apps is blocked by the student subscription policy.
+# The frontend Docker image (Nginx + React build) is deployed to App Service
+# instead — functionally identical, same Dockerfile, same result.
+  - stage: DeployFrontend
+    displayName: 'Deploy Frontend to App Service'
     dependsOn: Build
     condition: succeeded()
     jobs:
-      - deployment: DeployStaticJob
-        displayName: 'Deploy React Build to Static Web App'
-        environment: $[ eq(variables['Build.SourceBranch'], 'refs/heads/main') ]
+      - deployment: DeployFrontendDev
+        displayName: 'Deploy Frontend to Dev App Service'
+        environment: 'development'
         pool:
           vmImage: 'ubuntu-latest'
+        condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/develop'))
         strategy:
           runOnce:
             deploy:
               steps:
-                - checkout: self
-
-                # Install Node.js 18 to run the CRA build
-                - task: NodeTool@0
-                  displayName: 'Use Node.js 18'
+                - task: AzureWebAppContainer@1
+                  displayName: 'Deploy Frontend Image to Dev App Service'
                   inputs:
-                    versionSpec: '18.x'
+                    azureSubscription: $(AZURE_SUBSCRIPTION)
+                    appName: $(FRONTEND_APP_NAME)-dev
+                    containers: $(DOCKER_REGISTRY)/$(FRONTEND_IMAGE_NAME):$(imageTag)
 
-                # Install all dependencies
-                - script: npm ci
-                  displayName: 'Install frontend dependencies'
-                  workingDirectory: frontend
-
-                # Run CRA build — outputs to frontend/build/
-                # REACT_APP_API_URL is injected here so App.js picks it up
-                - script: npm run build
-                  displayName: 'CRA build (outputs to frontend/build/)'
-                  workingDirectory: frontend
-                  env:
-                    REACT_APP_API_URL: $(REACT_APP_API_URL)
-
-                # Deploy the build/ output to Azure Static Web App
-                # STATIC_WEB_APP_TOKEN comes from your taskapp-variables group
-                # (get it from Azure Portal > Static Web App > Manage deployment token)
-                - task: AzureStaticWebApp@0
-                  displayName: 'Deploy to Azure Static Web App'
+      - deployment: DeployFrontendProd
+        displayName: 'Deploy Frontend to Prod App Service'
+        environment: 'production'
+        pool:
+          vmImage: 'ubuntu-latest'
+        condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebAppContainer@1
+                  displayName: 'Deploy Frontend Image to Prod App Service'
                   inputs:
-                    azure_static_web_apps_api_token: $(STATIC_WEB_APP_TOKEN)
-                    app_location: 'frontend'      # Root of the frontend source
-                    output_location: 'build'      # CRA output dir
-                    skip_app_build: true          # We already ran npm run build above
+                    azureSubscription: $(AZURE_SUBSCRIPTION)
+                    appName: $(FRONTEND_APP_NAME)
+                    containers: $(DOCKER_REGISTRY)/$(FRONTEND_IMAGE_NAME):$(imageTag)

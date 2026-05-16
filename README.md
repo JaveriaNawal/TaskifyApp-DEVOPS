@@ -9,9 +9,12 @@ deployed on Microsoft Azure with full CI/CD pipelines and DevSecOps practices.
 
 | Item | Value |
 |---|---|
-| **Live Static Web App URL** | `https://<YOUR-APP>.azurestaticapps.net` |
-| **Backend Health Endpoint** | `https://<YOUR-BACKEND>.azurewebsites.net/api/health` |
-| **Azure DevOps Project** | `https://dev.azure.com/<YOUR-ORG>/taskapp-cicd` |
+| **Live Frontend URL** | `https://app-taskapp-frontend-javeria.azurewebsites.net` |
+| **Backend Health Endpoint** | `https://app-taskapp-backend-javeria.azurewebsites.net/api/health` |
+| **Azure DevOps Project** | `https://dev.azure.com/devops-training-javeria/taskapp-cicd` |
+
+> **Note:** Azure Static Web Apps is blocked by the university Azure for Students subscription policy.
+> The frontend is deployed as a Docker container (Nginx + React build) on Azure App Service instead — functionally identical.
 
 > **Screenshots** — add these after completing the lab:
 > - `docs/screenshots/pipeline-run.png` — successful pipeline run (all stages green)
@@ -80,17 +83,18 @@ deployed on Microsoft Azure with full CI/CD pipelines and DevSecOps practices.
 
 Create a variable group named **`taskapp-variables`** in Pipelines > Library:
 
-| Variable | Example Value | Secret? |
+| Variable | Value | Secret? |
 |---|---|---|
-| `DOCKER_REGISTRY` | `acrtaskappyourname.azurecr.io` | No |
+| `DOCKER_REGISTRY` | `acrtaskappjaveria.azurecr.io` | No |
 | `BACKEND_IMAGE_NAME` | `taskapp-backend` | No |
 | `FRONTEND_IMAGE_NAME` | `taskapp-frontend` | No |
 | `AZURE_SUBSCRIPTION` | `azure-service-connection` | No |
-| `BACKEND_APP_NAME` | `app-taskapp-backend-yourname` | No |
-| `REACT_APP_API_URL` | `https://app-taskapp-backend-yourname.azurewebsites.net` | No |
-| `STATIC_WEB_APP_TOKEN` | *(from Azure Portal → Static Web App → Manage token)* | **Yes** |
-| `STATIC_WEB_APP_URL` | `<your-app>.azurestaticapps.net` | No |
-| `DB_CONNECTION_STRING` | `Server=tcp:...` | **Yes** |
+| `BACKEND_APP_NAME` | `app-taskapp-backend-javeria` | No |
+| `FRONTEND_APP_NAME` | `app-taskapp-frontend-javeria` | No |
+| `REACT_APP_API_URL` | `https://app-taskapp-backend-javeria.azurewebsites.net` | No |
+| `STATIC_WEB_APP_TOKEN` | *(not needed — using App Service)* | — |
+| `STATIC_WEB_APP_URL` | `app-taskapp-frontend-javeria.azurewebsites.net` | No |
+| `DB_CONNECTION_STRING` | `Server=tcp:sql-taskapp-javeria.database.windows.net,1433;Database=db-taskapp;User ID=taskadmin;Password=TaskApp@2024Secure!;Encrypt=true;` | **Yes** |
 
 ---
 
