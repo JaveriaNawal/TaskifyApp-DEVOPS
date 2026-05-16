@@ -1,0 +1,233 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Security Pipeline — DevSecOps (Extra Mile)
+#
+# Repo structure:  backend/  (Node.js + Express + Azure SQL)
+#                  frontend/ (React + CRA)
+#
+# Security order — correct enterprise sequence:
+#   SAST  → runs BEFORE build   (catches code vulnerabilities early)
+#   SCA   → runs BEFORE deploy  (catches dependency CVEs before they ship)
+#   Build → only runs if SAST + SCA both passed
+#   DAST  → runs AFTER deploy   (tests the live running application)
+#
+# Prerequisites (Extra Mile setup):
+#   1. SonarQube running on Azure VM (EM-B.1 / EM-B.2)
+#   2. SonarQube extension installed from Azure DevOps Marketplace (EM-B.5)
+#   3. Service connection 'sonarqube-connection' created in Project Settings
+#   4. Snyk extension installed from Azure DevOps Marketplace (EM-C.2)
+#   5. Service connection 'snyk-connection' created in Project Settings
+#   6. SNYK_TOKEN added to taskapp-variables variable group (mark as secret)
+#   7. STATIC_WEB_APP_URL added to taskapp-variables variable group
+# ─────────────────────────────────────────────────────────────────────────────
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+
+pr: none
+
+variables:
+  - group: taskapp-variables
+  - name: SONAR_PROJECT_KEY
+    value: 'taskapp-cicd_taskapp-backend'
+  - name: SONAR_HOST_URL
+    value: 'http://<YOUR-VM-IP>:9000'     # Replace with your SonarQube VM public IP
+
+# ── Stage 1: SAST — Static Application Security Testing ─────────────────────
+stages:
+  - stage: SAST
+    displayName: 'Security — SAST (SonarQube)'
+    jobs:
+      - job: SonarScan
+        displayName: 'SonarQube Code Analysis'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+            fetchDepth: 0             # Full git history required for SonarQube blame
+
+          # Requires the SonarQube extension installed from Azure DevOps Marketplace
+          # Extension: https://marketplace.visualstudio.com/items?itemName=SonarSource.sonarqube
+          - task: SonarQubePrepare@5
+            displayName: 'Prepare SonarQube Analysis'
+            inputs:
+              SonarQube: sonarqube-connection   # Service connection to your SonarQube VM
+              scannerMode: 'CLI'
+              configMode: 'manual'
+              cliProjectKey: $(SONAR_PROJECT_KEY)
+              cliProjectName: 'Task App Backend'
+              extraProperties: |
+                sonar.sources=backend/src
+                sonar.exclusions=**/node_modules/**,**/coverage/**
+                sonar.javascript.lcov.reportPaths=backend/coverage/lcov.info
+
+          - task: SonarQubeAnalyze@5
+            displayName: 'Run SonarQube Analysis'
+
+          - task: SonarQubePublish@5
+            displayName: 'Publish Quality Gate Result'
+            inputs:
+              pollingTimeoutSec: '300'
+
+# ── Stage 2: SCA — Software Composition Analysis ─────────────────────────────
+  - stage: SCA
+    displayName: 'Security — SCA (Snyk)'
+    dependsOn: SAST
+    condition: succeeded()
+    jobs:
+      - job: SnykScan
+        displayName: 'Snyk Dependency Vulnerability Scan'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          # Scan backend dependencies — backend/package.json
+          # failOnIssues: true means the pipeline fails if HIGH severity CVEs are found
+          - task: SnykSecurityScan@1
+            displayName: 'Snyk — Scan Backend Dependencies'
+            inputs:
+              serviceConnectionEndpoint: snyk-connection
+              testType: 'app'
+              targetFile: 'backend/package.json'
+              failOnIssues: true
+              monitorWhen: 'always'
+              additionalArguments: '--severity-threshold=high'
+
+          # Scan frontend dependencies — frontend/package.json
+          - task: SnykSecurityScan@1
+            displayName: 'Snyk — Scan Frontend Dependencies'
+            inputs:
+              serviceConnectionEndpoint: snyk-connection
+              testType: 'app'
+              targetFile: 'frontend/package.json'
+              failOnIssues: true
+              monitorWhen: 'always'
+              additionalArguments: '--severity-threshold=high'
+
+# ── Stage 3: Build & Deploy ───────────────────────────────────────────────────
+# Only runs if BOTH SAST and SCA passed — this is the security gate
+  - stage: BuildAndDeploy
+    displayName: 'Build & Deploy (gated by SAST + SCA)'
+    dependsOn: SCA
+    condition: succeeded()
+    jobs:
+      - job: BuildBackend
+        displayName: 'Build and Push Backend Image'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - task: Docker@2
+            displayName: 'Login to ACR'
+            inputs:
+              command: login
+              containerRegistry: acr-service-connection
+
+          # Build and push the backend Docker image
+          - task: Docker@2
+            displayName: 'Build and Push Backend Image'
+            inputs:
+              command: buildAndPush
+              repository: $(DOCKER_REGISTRY)/$(BACKEND_IMAGE_NAME)
+              dockerfile: backend/Dockerfile
+              buildContext: backend/
+              tags: |
+                $(Build.BuildId)
+                latest
+
+          # Deploy backend container to Azure App Service
+          - task: AzureWebAppContainer@1
+            displayName: 'Deploy Backend to App Service'
+            inputs:
+              azureSubscription: $(AZURE_SUBSCRIPTION)
+              appName: $(BACKEND_APP_NAME)
+              containers: $(DOCKER_REGISTRY)/$(BACKEND_IMAGE_NAME):$(Build.BuildId)
+
+      - job: BuildFrontend
+        displayName: 'Build and Deploy Frontend'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          # Install Node.js 18 for CRA build
+          - task: NodeTool@0
+            displayName: 'Use Node.js 18'
+            inputs:
+              versionSpec: '18.x'
+
+          # Install frontend dependencies
+          - script: npm ci
+            displayName: 'Install frontend dependencies'
+            workingDirectory: frontend
+
+          # CRA build — REACT_APP_API_URL baked into the bundle
+          - script: npm run build
+            displayName: 'CRA build (outputs to frontend/build/)'
+            workingDirectory: frontend
+            env:
+              REACT_APP_API_URL: $(REACT_APP_API_URL)
+
+          # Deploy to Azure Static Web App
+          - task: AzureStaticWebApp@0
+            displayName: 'Deploy Frontend to Azure Static Web App'
+            inputs:
+              azure_static_web_apps_api_token: $(STATIC_WEB_APP_TOKEN)
+              app_location: 'frontend'
+              output_location: 'build'      # CRA outputs to build/, NOT dist/
+              skip_app_build: true
+
+# ── Stage 4: DAST — Dynamic Application Security Testing ─────────────────────
+# Runs AFTER the app is deployed — tests the live running application
+  - stage: DAST
+    displayName: 'Security — DAST (OWASP ZAP)'
+    dependsOn: BuildAndDeploy
+    condition: succeeded()
+    jobs:
+      - job: ZapScan
+        displayName: 'OWASP ZAP Security Scan'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          # Pull the stable ZAP Docker image
+          - script: docker pull zaproxy/zap-stable
+            displayName: 'Pull OWASP ZAP Image'
+
+          # Baseline scan against the live Static Web App (frontend)
+          # Passive scan — finds obvious vulnerabilities without active attacking
+          # -I flag: don't fail the build on alerts (remove for strict mode)
+          - script: |
+              docker run --rm \
+                -v $(Build.ArtifactStagingDirectory):/zap/wrk/:rw \
+                zaproxy/zap-stable zap-baseline.py \
+                -t https://$(STATIC_WEB_APP_URL) \
+                -r zap-report.html \
+                -I
+            displayName: 'ZAP Baseline Scan — Frontend (Static Web App)'
+
+          # API scan against the live backend App Service
+          # Uses the /api/health and /api/tasks routes
+          - script: |
+              docker run --rm \
+                -v $(Build.ArtifactStagingDirectory):/zap/wrk/:rw \
+                zaproxy/zap-stable zap-api-scan.py \
+                -t $(REACT_APP_API_URL)/api \
+                -f openapi \
+                -r zap-api-report.html \
+                -I
+            displayName: 'ZAP API Scan — Backend (App Service)'
+
+          # Always publish the HTML reports as pipeline artifacts
+          # even if the scan found issues — so you can review them
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish ZAP Security Reports'
+            inputs:
+              pathToPublish: $(Build.ArtifactStagingDirectory)
+              artifactName: 'zap-security-reports'
+            condition: always()

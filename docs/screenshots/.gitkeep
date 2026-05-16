@@ -1,0 +1,5 @@
+# This folder holds submission screenshots.
+# Add these files after completing the lab:
+#   pipeline-run.png     — successful pipeline run (all stages green)
+#   acr-images.png       — ACR with taskapp-backend and taskapp-frontend images
+#   static-web-app.png   — live frontend in browser

@@ -1,0 +1,25 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# terraform.tfvars.example
+#
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is listed in .gitignore — never commit it.
+#
+# Usage:
+#   cp terraform.tfvars.example terraform.tfvars
+#   # Edit terraform.tfvars with your values
+#   terraform plan
+# ─────────────────────────────────────────────────────────────────────────────
+
+resource_group_name = "rg-taskapp-tf"
+location            = "East US"
+environment         = "prod"
+
+# Must be globally unique, lowercase, no hyphens, 5-50 chars
+# Example: acrtaskappjohn  (replace 'john' with your name)
+acr_name = "acrtaskappyourname"
+
+# Must be globally unique — Azure App Service names are public DNS
+# Example: app-taskapp-backend-john
+backend_app_name = "app-taskapp-backend-yourname"
+
+backend_image_name = "taskapp-backend"

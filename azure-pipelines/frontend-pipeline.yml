@@ -1,0 +1,132 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Frontend CI/CD Pipeline — Task App
+#
+# Repo structure:  frontend/  (React + Create React App)
+# Key facts:
+#   - Build tool:   Create React App (react-scripts)
+#   - Output dir:   frontend/build
+#   - API env var:  REACT_APP_API_URL  (read via process.env in App.js)
+#   - Served by:    Azure Static Web App (free tier, global CDN)
+#
+# Triggers on changes to frontend/ folder on main or develop branches.
+# Pattern: Build React app → Deploy to Azure Static Web App
+#
+# Required variable group in Pipelines > Library:
+#   taskapp-variables  (see README.md for the full list of variables)
+#
+# Required service connections:
+#   acr-service-connection    (Docker Registry → your ACR)
+# ─────────────────────────────────────────────────────────────────────────────
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - frontend/**
+      - azure-pipelines/frontend-pipeline.yml
+
+pr: none
+
+variables:
+  - group: taskapp-variables
+  - name: imageTag
+    value: $(Build.BuildId)
+
+# ── Stage 1: Build & Push Frontend Docker Image ──────────────────────────────
+# We build a Docker image (Nginx serving the React build) AND push it to ACR.
+# This satisfies the lab requirement to show taskapp-frontend in ACR.
+stages:
+  - stage: Build
+    displayName: 'Build Frontend Docker Image'
+    jobs:
+      - job: BuildJob
+        displayName: 'Build and Push Frontend Image'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+            displayName: 'Checkout source code'
+
+          # Login to Azure Container Registry
+          - task: Docker@2
+            displayName: 'Login to ACR'
+            inputs:
+              command: login
+              containerRegistry: acr-service-connection
+
+          # Build the frontend Docker image.
+          # REACT_APP_API_URL is passed as a build-arg so CRA bakes the
+          # backend URL into the static bundle at build time.
+          - task: Docker@2
+            displayName: 'Build Frontend Image'
+            inputs:
+              command: build
+              repository: $(DOCKER_REGISTRY)/$(FRONTEND_IMAGE_NAME)
+              dockerfile: frontend/Dockerfile
+              buildContext: frontend/
+              arguments: '--build-arg REACT_APP_API_URL=$(REACT_APP_API_URL)'
+              tags: |
+                $(imageTag)
+                latest
+
+          # Push both the build-ID tag and 'latest' to ACR
+          - task: Docker@2
+            displayName: 'Push Frontend Image to ACR'
+            inputs:
+              command: push
+              repository: $(DOCKER_REGISTRY)/$(FRONTEND_IMAGE_NAME)
+              tags: |
+                $(imageTag)
+                latest
+
+# ── Stage 2: Deploy to Azure Static Web App ──────────────────────────────────
+# Azure Static Web App is the correct host for the CRA static bundle.
+# It is free for students and includes a global CDN automatically.
+  - stage: DeployStaticWebApp
+    displayName: 'Deploy to Azure Static Web App'
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - deployment: DeployStaticJob
+        displayName: 'Deploy React Build to Static Web App'
+        environment: $[ eq(variables['Build.SourceBranch'], 'refs/heads/main') ]
+        pool:
+          vmImage: 'ubuntu-latest'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                # Install Node.js 18 to run the CRA build
+                - task: NodeTool@0
+                  displayName: 'Use Node.js 18'
+                  inputs:
+                    versionSpec: '18.x'
+
+                # Install all dependencies
+                - script: npm ci
+                  displayName: 'Install frontend dependencies'
+                  workingDirectory: frontend
+
+                # Run CRA build — outputs to frontend/build/
+                # REACT_APP_API_URL is injected here so App.js picks it up
+                - script: npm run build
+                  displayName: 'CRA build (outputs to frontend/build/)'
+                  workingDirectory: frontend
+                  env:
+                    REACT_APP_API_URL: $(REACT_APP_API_URL)
+
+                # Deploy the build/ output to Azure Static Web App
+                # STATIC_WEB_APP_TOKEN comes from your taskapp-variables group
+                # (get it from Azure Portal > Static Web App > Manage deployment token)
+                - task: AzureStaticWebApp@0
+                  displayName: 'Deploy to Azure Static Web App'
+                  inputs:
+                    azure_static_web_apps_api_token: $(STATIC_WEB_APP_TOKEN)
+                    app_location: 'frontend'      # Root of the frontend source
+                    output_location: 'build'      # CRA output dir
+                    skip_app_build: true          # We already ran npm run build above

@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.npm
+
+# Environment variables — NEVER commit these
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build outputs
+frontend/build/
+client/dist/
+backend/coverage/
+server/coverage/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Terraform state — remote state is in Azure Blob Storage
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/.terraform.lock.hcl
+terraform/tfplan
+# terraform.tfvars contains real resource names — use terraform.tfvars.example as template
+terraform/terraform.tfvars
+
+# Docker
+.dockerignore
