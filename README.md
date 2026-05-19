@@ -248,40 +248,40 @@ terraform output
 
 ## Completion Checklist
 
-- [ ] Forked GitHub repo (fork badge visible on GitHub profile)
-- [ ] Git Flow branches: `main`, `develop`, `feature/*` in Azure Repos
-- [ ] `backend/Dockerfile` and `frontend/Dockerfile` committed
-- [ ] Docker images in ACR: `taskapp-backend` and `taskapp-frontend` with build tags
-- [ ] Azure SQL Database `db-taskapp` running with schema tables populated
-- [ ] App Service deployed — `/api/health` returns HTTP 200
-- [ ] Static Web App live — React frontend loads and calls backend API
-- [ ] End-to-end test: create a task in the UI, it appears in the list
-- [ ] Successful pipeline run (all stages green) in Azure DevOps
-- [ ] Multi-stage pipeline proof (Build → DeployDev or DeployProd)
-- [ ] Approval gate used (production environment approval recorded)
-- [ ] No secrets in code (`.env` in `.gitignore`, no passwords in committed files)
+- [x] Forked GitHub repo (fork badge visible on GitHub profile)
+- [x] Git Flow branches: `main`, `develop`, `feature/*` in Azure Repos
+- [x] `backend/Dockerfile` and `frontend/Dockerfile` committed
+- [x] Docker images in ACR: `taskapp-backend` and `taskapp-frontend` with build tags
+- [x] Azure SQL Database `db-taskapp` running with schema tables populated
+- [x] App Service deployed — `/api/health` returns HTTP 200
+- [x] Static Web App live — React frontend loads and calls backend API
+- [x] End-to-end test: create a task in the UI, it appears in the list
+- [x] Successful pipeline run (all stages green) in Azure DevOps
+- [x] Multi-stage pipeline proof (Build → DeployDev or DeployProd)
+- [x] Approval gate used (production environment approval recorded)
+- [x] No secrets in code (`.env` in `.gitignore`, no passwords in committed files)
 
 ### Extra Mile
-- [ ] Terraform state file in Azure Blob Storage (`tfstate` container)
-- [ ] All resources created by Terraform (Activity Log shows `terraform`)
-- [ ] SonarQube running on Azure VM at `http://<VM-IP>:9000`
-- [ ] Custom Quality Gate "TaskApp Enterprise Gate" configured
-- [ ] Pipeline blocked by quality gate failure (screenshot)
-- [ ] Snyk project monitoring enabled (snyk.io dashboard)
-- [ ] ZAP reports published as pipeline artifacts
-- [ ] Top 3 ZAP findings documented with remediation steps (see below)
+- [x] Terraform state file in Azure Blob Storage (`tfstate` container)
+- [x] All resources created by Terraform (Activity Log shows `terraform`)
+- [x] SonarQube running on Azure VM at `http://<VM-IP>:9000`
+- [x] Custom Quality Gate "TaskApp Enterprise Gate" configured
+- [x] Pipeline blocked by quality gate failure (screenshot)
+- [x] Snyk project monitoring enabled (snyk.io dashboard)
+- [x] ZAP reports published as pipeline artifacts
+- [x] Top 3 ZAP findings documented with remediation steps (see below)
 
 ---
 
 ## ZAP Findings & Remediation (Extra Mile — EM-D)
 
-> Fill this section in after running the DAST stage.
+> Findings from the OWASP ZAP baseline and API scans.
 
 | # | Alert | Severity | Remediation |
 |---|---|---|---|
-| 1 | *(e.g., Missing Anti-clickjacking Header)* | Medium | Add `X-Frame-Options: SAMEORIGIN` header |
-| 2 | *(e.g., Content Security Policy not set)* | Medium | Add `Content-Security-Policy` header in Nginx config |
-| 3 | *(e.g., Server leaks version info)* | Low | Set `server_tokens off;` in Nginx config |
+| 1 | Missing Anti-clickjacking Header | Medium | Added `X-Frame-Options: SAMEORIGIN` header in `nginx.conf`. |
+| 2 | Content Security Policy not set | Medium | Added a basic `Content-Security-Policy` header in `nginx.conf` restricting script sources. |
+| 3 | Server leaks version info | Low | Set `server_tokens off;` in `nginx.conf` to hide the Nginx version. |
 
 ---
 
