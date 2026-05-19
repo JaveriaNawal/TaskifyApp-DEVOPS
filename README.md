@@ -16,12 +16,6 @@ deployed on Microsoft Azure with full CI/CD pipelines and DevSecOps practices.
 > **Note:** Azure Static Web Apps is blocked by the university Azure for Students subscription policy.
 > The frontend is deployed as a Docker container (Nginx + React build) on Azure App Service instead — functionally identical.
 
-> **Screenshots** — add these after completing the lab:
-> - `docs/screenshots/pipeline-run.png` — successful pipeline run (all stages green)
-> - `docs/screenshots/acr-images.png` — ACR with taskapp-backend and taskapp-frontend images
-> - `docs/screenshots/static-web-app.png` — live frontend in browser
-
----
 
 ## Architecture
 
