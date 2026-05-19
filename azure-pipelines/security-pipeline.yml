@@ -148,38 +148,38 @@ stages:
               containers: $(DOCKER_REGISTRY)/$(BACKEND_IMAGE_NAME):$(Build.BuildId)
 
       - job: BuildFrontend
-        displayName: 'Build and Deploy Frontend'
+        displayName: 'Build and Push Frontend Image'
         pool:
           vmImage: 'ubuntu-latest'
         steps:
           - checkout: self
 
-          # Install Node.js 18 for CRA build
-          - task: NodeTool@0
-            displayName: 'Use Node.js 18'
+          - task: Docker@2
+            displayName: 'Login to ACR'
             inputs:
-              versionSpec: '18.x'
+              command: login
+              containerRegistry: acr-service-connection
 
-          # Install frontend dependencies
-          - script: npm ci
-            displayName: 'Install frontend dependencies'
-            workingDirectory: frontend
-
-          # CRA build — REACT_APP_API_URL baked into the bundle
-          - script: npm run build
-            displayName: 'CRA build (outputs to frontend/build/)'
-            workingDirectory: frontend
-            env:
-              REACT_APP_API_URL: $(REACT_APP_API_URL)
-
-          # Deploy to Azure Static Web App
-          - task: AzureStaticWebApp@0
-            displayName: 'Deploy Frontend to Azure Static Web App'
+          # Build and push the frontend Docker image
+          - task: Docker@2
+            displayName: 'Build and Push Frontend Image'
             inputs:
-              azure_static_web_apps_api_token: $(STATIC_WEB_APP_TOKEN)
-              app_location: 'frontend'
-              output_location: 'build'      # CRA outputs to build/, NOT dist/
-              skip_app_build: true
+              command: buildAndPush
+              repository: $(DOCKER_REGISTRY)/$(FRONTEND_IMAGE_NAME)
+              dockerfile: frontend/Dockerfile
+              buildContext: frontend/
+              arguments: '--build-arg REACT_APP_API_URL=$(REACT_APP_API_URL)'
+              tags: |
+                $(Build.BuildId)
+                latest
+
+          # Deploy frontend container to Azure App Service
+          - task: AzureWebAppContainer@1
+            displayName: 'Deploy Frontend to App Service'
+            inputs:
+              azureSubscription: $(AZURE_SUBSCRIPTION)
+              appName: $(FRONTEND_APP_NAME)
+              containers: $(DOCKER_REGISTRY)/$(FRONTEND_IMAGE_NAME):$(Build.BuildId)
 
 # ── Stage 4: DAST — Dynamic Application Security Testing ─────────────────────
 # Runs AFTER the app is deployed — tests the live running application
@@ -199,17 +199,17 @@ stages:
           - script: docker pull zaproxy/zap-stable
             displayName: 'Pull OWASP ZAP Image'
 
-          # Baseline scan against the live Static Web App (frontend)
+          # Baseline scan against the live Frontend App Service
           # Passive scan — finds obvious vulnerabilities without active attacking
           # -I flag: don't fail the build on alerts (remove for strict mode)
           - script: |
               docker run --rm \
                 -v $(Build.ArtifactStagingDirectory):/zap/wrk/:rw \
                 zaproxy/zap-stable zap-baseline.py \
-                -t https://$(STATIC_WEB_APP_URL) \
+                -t https://$(FRONTEND_APP_NAME).azurewebsites.net \
                 -r zap-report.html \
                 -I
-            displayName: 'ZAP Baseline Scan — Frontend (Static Web App)'
+            displayName: 'ZAP Baseline Scan — Frontend (App Service)'
 
           # API scan against the live backend App Service
           # Uses the /api/health and /api/tasks routes
