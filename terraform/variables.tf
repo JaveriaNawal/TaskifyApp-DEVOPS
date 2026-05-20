@@ -49,3 +49,32 @@ variable "backend_image_name" {
   type        = string
   default     = "taskapp-backend"
 }
+
+variable "frontend_app_name" {
+  description = "Name of the frontend Azure App Service (must be globally unique)"
+  type        = string
+  default     = "app-taskapp-frontend"
+}
+
+variable "frontend_image_name" {
+  description = "Docker image name for the frontend (as stored in ACR)"
+  type        = string
+  default     = "taskapp-frontend"
+}
+
+variable "sql_server_name" {
+  description = "Name of the Azure SQL Server (must be globally unique, lowercase)"
+  type        = string
+}
+
+variable "sql_admin_login" {
+  description = "SQL Server administrator login username"
+  type        = string
+  default     = "taskadmin"
+}
+
+variable "sql_admin_password" {
+  description = "SQL Server administrator password (must meet Azure complexity requirements)"
+  type        = string
+  sensitive   = true
+}

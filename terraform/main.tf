@@ -20,15 +20,9 @@ terraform {
     }
   }
 
-  # Remote state — all team members share the same state file
-  # Storage account must be created manually before running terraform init
-  # See EM-A.3 in the lab guide for the az CLI commands to create it
-  backend "azurerm" {
-    resource_group_name  = "rg-terraform-state"
-    storage_account_name = "sttfstateyourname"   # Replace with your storage account name
-    container_name       = "tfstate"
-    key                  = "taskapp.tfstate"
-  }
+  # Local state — state file is stored locally in terraform.tfstate
+  # This avoids needing to pre-create a storage account.
+  # For team/production use, switch to the azurerm backend block below.
 }
 
 provider "azurerm" {
@@ -115,14 +109,66 @@ resource "azurerm_linux_web_app" "backend" {
   }
 }
 
-# ── Azure Static Web App ──────────────────────────────────────────────────────
-# Hosts the React frontend static build — free tier, global CDN included
-resource "azurerm_static_site" "frontend" {
-  name                = "stapp-taskapp-frontend"
+# ── Frontend App Service ──────────────────────────────────────────────────────
+# Note: Azure Static Web Apps is blocked by the student subscription policy.
+# The frontend (Nginx + React build) runs as a Docker container on App Service instead.
+resource "azurerm_linux_web_app" "frontend" {
+  name                = var.frontend_app_name
   resource_group_name = azurerm_resource_group.main.name
-  location            = "eastus2"   # Static Web Apps have limited region availability
-  sku_tier            = "Free"
-  sku_size            = "Free"
+  location            = azurerm_resource_group.main.location
+  service_plan_id     = azurerm_service_plan.plan.id
+
+  site_config {
+    application_stack {
+      docker_image     = "${azurerm_container_registry.acr.login_server}/${var.frontend_image_name}"
+      docker_image_tag = "latest"
+    }
+    always_on = true
+  }
+
+  app_settings = {
+    DOCKER_REGISTRY_SERVER_URL      = "https://${azurerm_container_registry.acr.login_server}"
+    DOCKER_REGISTRY_SERVER_USERNAME = azurerm_container_registry.acr.admin_username
+    DOCKER_REGISTRY_SERVER_PASSWORD = azurerm_container_registry.acr.admin_password
+  }
+
+  tags = {
+    project    = "taskapp"
+    managed_by = "terraform"
+  }
+}
+
+# ── Azure SQL Server ──────────────────────────────────────────────────────────
+resource "azurerm_mssql_server" "sql" {
+  name                         = var.sql_server_name
+  resource_group_name          = azurerm_resource_group.main.name
+  location                     = azurerm_resource_group.main.location
+  version                      = "12.0"
+  administrator_login          = var.sql_admin_login
+  administrator_login_password = var.sql_admin_password
+
+  tags = {
+    project    = "taskapp"
+    managed_by = "terraform"
+  }
+}
+
+# Allow all Azure services to access the SQL Server (required by App Service)
+resource "azurerm_mssql_firewall_rule" "allow_azure" {
+  name             = "AllowAzureServices"
+  server_id        = azurerm_mssql_server.sql.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
+}
+
+# ── Azure SQL Database ────────────────────────────────────────────────────────
+resource "azurerm_mssql_database" "db" {
+  name           = "db-taskapp"
+  server_id      = azurerm_mssql_server.sql.id
+  collation      = "SQL_Latin1_General_CP1_CI_AS"
+  sku_name       = "GP_S_Gen5_1"   # Serverless, 1 vCore — auto-pauses when idle
+  min_capacity   = 0.5
+  auto_pause_delay_in_minutes = 60
 
   tags = {
     project    = "taskapp"

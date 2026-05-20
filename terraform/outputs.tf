@@ -31,13 +31,23 @@ output "backend_app_service_name" {
   value       = azurerm_linux_web_app.backend.name
 }
 
-output "static_web_app_url" {
-  description = "Frontend Static Web App URL — use as STATIC_WEB_APP_URL in Azure DevOps variable group"
-  value       = "https://${azurerm_static_site.frontend.default_host_name}"
+output "frontend_app_service_url" {
+  description = "Frontend App Service URL — open this in your browser after deploy"
+  value       = "https://${azurerm_linux_web_app.frontend.default_hostname}"
 }
 
-output "static_web_app_api_key" {
-  description = "Static Web App deployment token — use as STATIC_WEB_APP_TOKEN in Azure DevOps variable group (mark as secret)"
-  value       = azurerm_static_site.frontend.api_key
+output "frontend_app_service_name" {
+  description = "Frontend App Service name — use as FRONTEND_APP_NAME in Azure DevOps variable group"
+  value       = azurerm_linux_web_app.frontend.name
+}
+
+output "sql_server_fqdn" {
+  description = "SQL Server fully qualified domain name — use in DB_CONNECTION_STRING"
+  value       = azurerm_mssql_server.sql.fully_qualified_domain_name
+}
+
+output "db_connection_string" {
+  description = "Full SQL connection string for the backend App Service (mark as secret!)"
+  value       = "Server=tcp:${azurerm_mssql_server.sql.fully_qualified_domain_name},1433;Database=db-taskapp;User ID=${var.sql_admin_login};Password=${var.sql_admin_password};Encrypt=true;TrustServerCertificate=false;Connection Timeout=30;"
   sensitive   = true
 }
