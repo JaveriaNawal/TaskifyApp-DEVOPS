@@ -3,18 +3,7 @@
 A production-grade full-stack Task Manager built with React + Node.js/Express + Azure SQL,
 deployed on Microsoft Azure with full CI/CD pipelines and DevSecOps practices.
 
----
-
-## Submission
-
-| Item | Value |
-|---|---|
-| **Live Frontend URL** | `https://app-taskapp-frontend-javeria.azurewebsites.net` |
-| **Backend Health Endpoint** | `https://app-taskapp-backend-javeria.azurewebsites.net/api/health` |
-| **Azure DevOps Project** | `https://dev.azure.com/devops-training-javeria/taskapp-cicd` |
-
-> **Note:** Azure Static Web Apps is blocked by the university Azure for Students subscription policy.
-> The frontend is deployed as a Docker container (Nginx + React build) on Azure App Service instead — functionally identical.
+ The frontend is deployed as a Docker container (Nginx + React build) on Azure App Service instead — functionally identical.
 
 
 ## Architecture
